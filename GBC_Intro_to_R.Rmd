@@ -1,0 +1,325 @@
+---
+title: "Introduction to R"
+author: "Rushikesh"
+date: "14/09/2020"
+output: 
+  flexdashboard::flex_dashboard:
+    storyboard: true
+    social: menu
+    source: embed
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Welcome - R Markdown
+
+```{r Install Packages, include=FALSE}
+install.packages("dplyr",repos = "http://cran.us.r-project.org")
+install.packages("sqldf",repos = "http://cran.us.r-project.org")
+install.packages("car",repos = "http://cran.us.r-project.org")
+install.packages("tidyquant",repos = "http://cran.us.r-project.org")
+install.packages("flexdashboard",repos = "http://cran.us.r-project.org")
+install.packages("plotly",repos = "http://cran.us.r-project.org")
+
+```
+
+***
+Welcome, R is a programming language and free software environment for statistical computing and graphics supported by the R Foundation for Statistical Computing. The R language is widely used among statisticians and data miners for developing statistical software and data analysis.
+
+```{r Load Packages, include=FALSE}
+library(dplyr)
+library(sqldf)
+library(plotly)
+
+```
+
+```{r import csv data, include=FALSE}
+
+my_data <- read.csv("Lin_Reg_R.csv")
+
+View(my_data)
+
+quantile(my_data$Losses,c(0,0.01,0.05,0.25,0.5,0.75,1))
+
+summary(my_data)
+```
+
+### Data Wrangling
+
+```{r Data Wrangling, include=FALSE}
+
+## base , dplyr , sqldf
+# Select Data 
+my_data %>% select(Age, Gender)
+
+# Filter Data
+my_data %>% select(Age, Gender) %>% filter(Gender == "M")
+
+# Mutate Data 
+my_data <- my_data %>% mutate(new_losses = my_data$Losses * 1.5)
+
+my_data <- my_data %>% mutate(capped_losses = NULL)
+
+# Remove Null
+my_data %>% filter(!is.na(my_data$Married))
+
+# Summarize Data
+my_data %>% group_by(Gender) %>% summarize(n())
+
+table(my_data$Married)
+
+# Condition if else (Managing Outlier)
+
+my_data$capped_losses <- ifelse(my_data$Losses < 32,32 ,ifelse(my_data$Losses > 1500, 1500, my_data$Losses))
+
+my_data$Gender_Dummy <- ifelse(my_data$Gender == "M", 1 , 0)
+
+my_data$Marriage_Dummy <- ifelse(my_data$Married == "Married", 1 , 0)
+
+my_data$Fuel_Dummy <- ifelse(my_data$Fuel.Type == "P", 1 , 0)
+
+View(my_data)
+
+## Bonus Library for SQL users
+library(sqldf)
+
+sqldf("select * from my_data")
+
+my_sql_query_data <- sqldf("select Gender , count(Gender) from my_data group by Gender")
+
+sqldf("select max(Losses) from my_data")
+
+sqldf("select min(Losses) from my_data")
+
+```
+
+***
+Data wrangling, sometimes referred to as data munging, is the process of transforming and mapping data from one "raw" data form into another format with the intent of making it more appropriate and valuable for a variety of downstream purposes such as analytics.
+
+### Plotting Graphs - Histogram
+
+```{r Lets Plot}
+
+# base , ggplot , plot_ly
+
+# ?hist Not sure about something use R help 
+
+hist(my_data$Age)
+
+```
+
+### Plotting Graphs - Histogram 2
+```{r}
+
+# histogram with added parameters
+hist(my_data$Age,
+main= paste("Histogram of" , "Age"),
+xlab="Temperature in degrees Fahrenheit",
+xlim=c(10,80),
+#ylim = c(0,2500),
+col="darkmagenta",
+freq= FALSE
+) 
+
+```
+
+### Plotting Graphs - ggplot
+
+```{r}
+
+# ggplot2 
+
+library(ggplot2)
+
+#ggplot(my_data, aes(Age, Losses))
+
+# ggplot(my_data, aes(Age, Losses)) + geom_bar(stat="identity") + 
+#    guides(fill=TRUE) + ggtitle("Bar Chart of Age vs Losses")
+
+
+p <- ggplot(my_data, aes(Age, Losses)) + 
+        geom_line() +
+        #geom_point() + 
+        #guides(fill=TRUE) + 
+        ggtitle("Bar Chart of Age vs Losses")
+
+# displays as you require
+require(scales)
+p + scale_x_continuous(labels = comma)
+
+#p + scale_x_discrete(labels = comma)
+
+```
+
+### Plotting Graphs - Plotly
+```{r}
+
+Married_status <- sqldf("select Married, count(Married) no_of_records from my_data group by Married")
+
+p <- ggplot(Married_status, aes(x=Married,y=no_of_records , fill=Married)) +
+    geom_bar(stat="identity")
+
+ggplotly(p)
+
+```
+
+
+### Corelation
+
+```{r Corelation}
+
+#my_data <- read.csv("Lin_Reg_R.csv")
+
+#View(my_data)
+
+cor(my_data$Losses, my_data$Age)
+
+# For cor to work all variables need to be in numeric 
+
+cor(my_data[sapply(my_data,is.numeric)])
+
+corr <- cor(my_data[sapply(my_data,is.numeric)])
+
+# install.packages("corrplot")
+
+corrplot::corrplot(corr)
+
+```
+
+### Regression analysis
+
+```{r regression}
+
+# Lets start with Independent variables 
+
+#fit <- lm(dependent_variable ~ independent variable1 + independent variable2 , data = my_dataframe)
+
+fit <- lm(capped_losses ~ Age + Years.of.Driving.Experience + Number.of.Vehicles + Vehicle.Age + Gender_Dummy + Marriage_Dummy  + Fuel_Dummy, data = my_data  )
+
+# lm fits regression equation 
+
+summary(fit)
+
+# Find out multicollinearity ( value above 3 is high multicollinearity )
+
+
+library(car)
+
+vif(fit)
+
+# Why Multicollinearity is a problem?
+# Multicollinearity is a problem because it undermines the statistical significance of an independent variable. Other things being equal, the larger the standard error of a regression coefficient, the less likely it is that this coefficient will be statistically significant.
+
+fit <- lm(capped_losses ~ Age +  Number.of.Vehicles + Vehicle.Age + Gender_Dummy + Marriage_Dummy + Fuel_Dummy, data = my_data  )
+
+vif(fit)
+
+summary(fit)
+
+#Lets drop Number of vehicles varibale as t-value less
+
+fit <- lm(capped_losses ~ Age +  Vehicle.Age + Gender_Dummy + Marriage_Dummy +  Fuel_Dummy, data = my_data  )
+
+vif(fit)
+
+summary(fit)
+
+# Multiple R-squared:  0.7041,	Adjusted R-squared:  0.704 ~ 70%
+# In general, the higher the R-squared, the better the model fits your data
+
+my_pred <- predict(fit, type = "response")
+
+head(my_pred)
+
+my_residuals <- residuals(fit, type = "deviance")
+
+head(my_residuals)
+
+# plot predicted vs actuals losses 
+
+plot(my_data$capped_losses, my_pred)
+
+
+newdata <- data.frame(my_data$Policy.Number, my_data$capped_losses , my_pred , my_residuals)
+
+View(newdata)
+
+write.csv(newdata,file = "my_prediction_results.csv")
+
+```
+
+### Time Series 
+
+```{r Time series}
+
+
+library("tidyquant")
+
+options("getSymbols.warning4.0"=FALSE)
+
+options("getSymbols.yahoo.warning"=FALSE)
+# Downloading Apple price using quantmod
+
+getSymbols("AAPL", from = '2017-01-01',
+           to = "2020-03-01",warnings = FALSE,
+           auto.assign = TRUE)
+
+head(AAPL)
+
+class(AAPL)
+
+chart_Series(AAPL)
+
+chart_Series(AAPL['2017-12/2018-03'])
+
+
+#We can download prices for several stocks. There are several steps to this
+
+tickers = c("AAPL", "NFLX", "AMZN", "TSLA", "FB")
+
+getSymbols(tickers,
+           from = "2017-01-01",
+           to = "2020-01-15")
+
+library("purrr")
+
+prices <- map(tickers,function(x) Ad(get(x)))
+
+prices <- reduce(prices,merge)
+
+colnames(prices) <- tickers
+
+prices <- tq_get(tickers,
+                 from = "2020-01-01",
+                 to = "2020-07-21",
+                 get = "stock.prices")
+
+
+prices %>%
+  group_by(symbol) %>%
+  slice(1)
+
+prices %>%
+  ggplot(aes(x = date, y = adjusted, color = symbol)) +
+  geom_line()
+
+
+ggplotly(prices %>%
+  ggplot(aes(x = date, y = adjusted, color = symbol)) +
+  geom_line())
+
+
+# Create a multiple line chart of the closing prices of the four stocks,
+# showing each stock in a different color on the same graph.
+# Transform the data so each stock begins at 100 and replot.
+tq_get(c("GOOGL","AMZN","FB","AAPL"), get="stock.prices") %>%
+  group_by(symbol) %>%
+  mutate(close = 100*close/first(close)) %>%
+  ggplot(aes(date, close, color=symbol)) +
+  geom_line()
+
+
+```
+
